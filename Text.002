@@ -1,0 +1,177 @@
+import bpy
+import mathutils
+import math
+
+def createBoolean(context, duplicated, cube, type):
+    context.view_layer.objects.active = duplicated
+    
+    # Apply modifiers
+    for modifier in duplicated.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+        
+    # Attach the cube as a bool
+    booleanMod = duplicated.modifiers.new("Boolean", "BOOLEAN")
+    booleanMod.object = cube;
+    booleanMod.operation = type
+    booleanMod.use_self = True;
+    return
+
+def makeCube(context, size, location):
+        bpy.ops.mesh.primitive_cube_add(size=size,location=location)
+        cube = context.active_object
+        cube.hide_set(True)
+        return cube
+
+def main(context):
+
+    originalObject = context.active_object
+
+    lowResObject = originalObject.copy()
+    lowResObject.data = originalObject.data.copy()
+    lowResObject.name = "Low Res Copy"
+    context.collection.objects.link(lowResObject)
+
+    # Create a low res clone for working on
+    # Decimate to 4k polys if over 4k polys
+    decimateRatio = min(2000 / len(originalObject.data.polygons), 1)
+    decimateMod = lowResObject.modifiers.new("Decimate", "DECIMATE")
+    decimateMod.ratio = decimateRatio
+    
+    # Smooth mesh
+    smoothMod = lowResObject.modifiers.new("Smooth", "SMOOTH")
+    smoothMod.factor = 3
+    
+    # Apply modifiers
+    for modifier in lowResObject.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+    """
+    # Add a wee funnel to the thing
+    eul = mathutils.Euler((math.radians(180), 0.0, 0.0), 'XYZ')
+    coneRadius1 = lowResObject.dimensions.x * 0.5
+    print(lowResObject.dimensions.z)
+    bpy.ops.mesh.primitive_cone_add(vertices=64,radius1=coneRadius1,depth=coneRadius1,location=(0,0,lowResObject.dimensions.z + (coneRadius1 * 3)),rotation=eul)
+    cone = context.active_object
+    cone.name = 'Coney Island'
+    ## TODO: Move the bit above out to its own function so the cone can be moved
+    
+    context.view_layer.objects.active = lowResObject
+    """
+    # Duplicate object
+    duplicated = context.active_object.copy()
+    duplicated.data = context.active_object.data.copy()
+    duplicated.name = "Shell"
+    context.collection.objects.link(duplicated)
+    context.view_layer.objects.active = duplicated
+
+    # Apply modifiers
+    for modifier in duplicated.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+    # Make shell
+    mod = duplicated.modifiers.new("Solidify", "SOLIDIFY")
+    mod.offset = 5
+    mod.thickness = 5
+    mod.use_quality_normals = True
+    mod.nonmanifold_thickness_mode = 'FIXED'
+    mod.use_rim = False
+    mod.use_rim_only = False
+
+    # Apply modifiers
+    for modifier in duplicated.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+    # Apply boolean to duplicated mold
+    context.view_layer.objects.active = duplicated
+    for modifier in duplicated.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+    # Add the middle mesh
+    middleSection = lowResObject.copy()
+    middleSection.data = lowResObject.data.copy()
+    middleSection.name = "Middle section"
+    context.collection.objects.link(middleSection)
+    context.view_layer.objects.active = middleSection
+
+    # Make shell
+    mod = middleSection.modifiers.new("Solidify", "SOLIDIFY")
+    mod.offset = 2.5
+    mod.thickness = 15
+    mod.use_quality_normals = True
+    mod.nonmanifold_thickness_mode = 'FIXED'
+
+    # Create intersection of cube and middle mesh to create the clippy bit
+    cuboid = makeCube(context, 4, (0, 0, 0))
+    bpy.context.object.scale.yz = 500, 500
+    createBoolean(context, middleSection, cuboid, 'INTERSECT')
+    
+    for modifier in middleSection.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    
+    # Combine both faces and make both halves split up by performing different intersects with the same model
+    createBoolean(context, duplicated, middleSection, 'UNION')
+
+    # Make a cube to be used for floor boolean, 400mm dimension
+    cube = makeCube(context, 1000, (300, 0, -500))
+    createBoolean(context, duplicated, cube, 'DIFFERENCE')
+
+    for modifier in duplicated.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+        
+    bpy.data.objects.remove(bpy.data.objects["Middle section"], do_unlink=True)
+    bpy.data.objects.remove(bpy.data.objects["Low Res Copy"], do_unlink=True)
+    
+    # Duplicated union mesh
+    leftSide = duplicated.copy()
+    leftSide.data = duplicated.data.copy()
+    leftSide.name = "Shell 2"
+    context.collection.objects.link(leftSide)
+    context.view_layer.objects.active = leftSide
+
+    # Make a cube to intersect on each side of mesh
+    cube = makeCube(context, 600, (300, 0, 300))
+    createBoolean(context, duplicated, cube, 'DIFFERENCE')
+
+    cube = makeCube(context, 600, (-300, 0, 300))
+    createBoolean(context, leftSide, cube, 'DIFFERENCE')
+    
+    # Apply modifiers to each side of mesh
+    for modifier in duplicated.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+    for modifier in leftSide.modifiers:
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+class SimpleOperator(bpy.types.Operator):
+    """Tooltip"""
+    bl_idname = "object.simple_operator"
+    bl_label = "Simple Object Operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None
+
+    def execute(self, context):
+        main(context)
+        return {'FINISHED'}
+
+def menu_func(self, context):
+    self.layout.operator(SimpleOperator.bl_idname, text=SimpleOperator.bl_label)
+
+
+# Register and add to the "object" menu (required to also use F3 search "Simple Object Operator" for quick access).
+def register():
+    bpy.utils.register_class(SimpleOperator)
+    bpy.types.VIEW3D_MT_object.append(menu_func)
+
+
+def unregister():
+    bpy.utils.unregister_class(SimpleOperator)
+    bpy.types.VIEW3D_MT_object.remove(menu_func)
+
+
+if __name__ == "__main__":
+    register()
+
+    # test call
+    bpy.ops.object.simple_operator()
