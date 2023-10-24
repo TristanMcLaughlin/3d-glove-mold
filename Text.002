@@ -20,13 +20,27 @@ def createBoolean(context, duplicated, cube, type, solver='EXACT'):
     booleanMod.solver = solver;
     return
 
+def addSolidifyModifier(context, object, thickness):
+    mod = object.modifiers.new("Solidify", "SOLIDIFY")
+    mod.offset = 1
+    mod.thickness = thickness
+    mod.use_quality_normals = True
+    mod.nonmanifold_thickness_mode = 'FIXED'
+    mod.use_rim = True
+    mod.use_rim_only = True
+    return
+
 def makeCube(context, size, location):
-        bpy.ops.mesh.primitive_cube_add(size=size,location=location)
-        cube = context.active_object
-        cube.hide_set(True)
-        return cube
+    bpy.ops.mesh.primitive_cube_add(size=size,location=location)
+    cube = context.active_object
+    cube.hide_set(True)
+    return cube
 
 def main(context):
+    ## TODO: Move these variables out to their own thing
+    gloveMoldThickness = 10;
+    shellThickness = 4;
+    flangeThickness = gloveMoldThickness + shellThickness + 5 # As thick as inner + outer + 5mm for clips
 
     originalObject = context.active_object
 
@@ -67,13 +81,7 @@ def main(context):
     context.view_layer.objects.active = duplicated
 
     # Make thicker version of model as basis of shell
-    mod = duplicated.modifiers.new("Solidify", "SOLIDIFY")
-    mod.offset = 1
-    mod.thickness = 10
-    mod.use_quality_normals = True
-    mod.nonmanifold_thickness_mode = 'FIXED'
-    mod.use_rim = False
-    mod.use_rim_only = False
+    addSolidifyModifier(context, duplicated, shellThickness + gloveMoldThickness)
     
     createBoolean(context, duplicated, cone, 'UNION')
 
@@ -81,9 +89,11 @@ def main(context):
     coneFlange = cone.copy()
     coneFlange.data = cone.data.copy()
     coneFlange.name = "Cone Flange"
-    coneFlange.location.z = coneFlange.location.z - 10
+    coneFlange.location.z = coneFlange.location.z - 5
     context.collection.objects.link(coneFlange)
     
+    addSolidifyModifier(context, coneFlange, gloveMoldThickness)
+    applyModifiers(context, coneFlange)
     cuboid = makeCube(context, 4, (0, 0, 0))
     bpy.context.object.scale.yz = 500, 500
 
@@ -98,14 +108,8 @@ def main(context):
     context.collection.objects.link(middleSection)
     context.view_layer.objects.active = middleSection
 
-    middleMod = middleSection.modifiers.new("Solidify", "SOLIDIFY")
-    mod.offset = 1
-    middleMod.thickness = 15
-    middleMod.use_quality_normals = True
-    middleMod.nonmanifold_thickness_mode = 'FIXED'
-    middleMod.use_rim = False
-    middleMod.use_rim_only = False
-    
+    addSolidifyModifier(context, middleSection, flangeThickness)
+
     createBoolean(context, middleSection, cuboid, 'INTERSECT')
     applyModifiers(context, middleSection)
 
@@ -123,18 +127,12 @@ def main(context):
     innerShell.name = "Shell"
     context.collection.objects.link(innerShell)
     
-    mod = innerShell.modifiers.new("Solidify", "SOLIDIFY")
-    mod.offset = 1
-    mod.thickness = 8
-    mod.use_quality_normals = True
-    mod.nonmanifold_thickness_mode = 'FIXED'
-    mod.use_rim = False
-    mod.use_rim_only = False
-    
+    addSolidifyModifier(context, innerShell, gloveMoldThickness)
+
     innerCone = cone.copy()
     innerCone.data = cone.data.copy()
     innerCone.name = "Cone Inner"
-    innerCone.location.z = cone.location.z + 5
+    innerCone.location.z = cone.location.z + shellThickness
     context.collection.objects.link(innerCone)
     
     createBoolean(context, innerShell, innerCone, 'UNION')
@@ -175,10 +173,10 @@ def main(context):
     applyModifiers(context, duplicated)
     applyModifiers(context, leftSide)
 
-class SimpleOperator(bpy.types.Operator):
+class MakeGloveMold(bpy.types.Operator):
     """Tooltip"""
-    bl_idname = "object.simple_operator"
-    bl_label = "Simple Object Operator"
+    bl_idname = "object.make_glove_mold"
+    bl_label = "Create glove mold for selected object"
 
     @classmethod
     def poll(cls, context):
@@ -189,17 +187,17 @@ class SimpleOperator(bpy.types.Operator):
         return {'FINISHED'}
 
 def menu_func(self, context):
-    self.layout.operator(SimpleOperator.bl_idname, text=SimpleOperator.bl_label)
+    self.layout.operator(MakeGloveMold.bl_idname, text=MakeGloveMold.bl_label)
 
 
 # Register and add to the "object" menu (required to also use F3 search "Simple Object Operator" for quick access).
 def register():
-    bpy.utils.register_class(SimpleOperator)
+    bpy.utils.register_class(MakeGloveMold)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
 
 def unregister():
-    bpy.utils.unregister_class(SimpleOperator)
+    bpy.utils.unregister_class(MakeGloveMold)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
 
@@ -207,4 +205,4 @@ if __name__ == "__main__":
     register()
 
     # test call
-    bpy.ops.object.simple_operator()
+    bpy.ops.object.make_glove_mold()
