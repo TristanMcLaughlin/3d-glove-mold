@@ -14,10 +14,10 @@ def createBoolean(context, duplicated, cube, type, solver='EXACT'):
         
     # Attach the cube as a bool
     booleanMod = duplicated.modifiers.new("Boolean", "BOOLEAN")
-    booleanMod.object = cube;
+    booleanMod.object = cube
     booleanMod.operation = type
-    booleanMod.use_self = True;
-    booleanMod.solver = solver;
+    booleanMod.use_self = True
+    booleanMod.solver = solver
     return
 
 def addSolidifyModifier(context, object, thickness):
@@ -36,10 +36,9 @@ def makeCube(context, size, location):
     cube.hide_set(True)
     return cube
 
-def main(context):
-    ## TODO: Move these variables out to their own thing
-    gloveMoldThickness = 10;
-    shellThickness = 4;
+def makeGloveMold(context):
+    gloveMoldThickness = bpy.context.scene.glove_mold_thickness
+    shellThickness = bpy.context.scene.shell_thickness
     flangeThickness = gloveMoldThickness + shellThickness + 5 # As thick as inner + outer + 5mm for clips
 
     originalObject = context.active_object
@@ -62,15 +61,7 @@ def main(context):
 
     applyModifiers(context, lowResObject)
 
-    # Add a wee funnel to the thing
-    
-    eul = mathutils.Euler((math.radians(180), 0.0, 0.0), 'XYZ')
-    coneRadius1 = lowResObject.dimensions.x * 0.8
-    bpy.ops.mesh.primitive_cone_add(vertices=64,radius1=coneRadius1,depth=coneRadius1 * 1.2,location=(0,0,lowResObject.dimensions.z + (coneRadius1 * 1.75)),rotation=eul)
-    cone = context.active_object
-    cone.name = 'Cone Shell'
-    
-    ## TODO: Move the bit above out to its own function so the cone can be moved
+    cone = bpy.data.objects["Cone Shell"]
 
     # Duplicate object for working with
     context.view_layer.objects.active = lowResObject
@@ -113,8 +104,8 @@ def main(context):
     createBoolean(context, middleSection, cuboid, 'INTERSECT')
     applyModifiers(context, middleSection)
 
+    # Attach middle flange to cone flange
     createBoolean(context, duplicated, middleSection, 'UNION')
-
     applyModifiers(context, duplicated)
     
     # Delete middle flange and cone flange
@@ -173,36 +164,82 @@ def main(context):
     applyModifiers(context, duplicated)
     applyModifiers(context, leftSide)
 
-class MakeGloveMold(bpy.types.Operator):
-    """Tooltip"""
-    bl_idname = "object.make_glove_mold"
-    bl_label = "Create glove mold for selected object"
+# Define the operator class to create a cone
+class CreateConeOperator(bpy.types.Operator):
+    bl_idname = "object.create_cone"
+    bl_label = "Create Cone"
+
+    def check(self, context):
+        # Enable the button only if an object is selected
+        return len(bpy.context.selected_objects) != 0
 
     @classmethod
-    def poll(cls, context):
-        return context.active_object is not None
-
+    def makeCone(self, context):
+        originalObject = context.active_object
+        eul = mathutils.Euler((math.radians(180), 0.0, 0.0), 'XYZ')
+        coneRadius1 = originalObject.dimensions.x * 0.8
+        bpy.ops.mesh.primitive_cone_add(vertices=64,radius1=coneRadius1,depth=coneRadius1 * 1.2,location=(0,0,originalObject.dimensions.z + (coneRadius1 * 1.75)),rotation=eul)
+        cone = context.active_object
+        cone.name = 'Cone Shell'
+        for obj in bpy.context.selected_objects:
+            bpy.context.view_layer.objects.active = obj
+        return;
+    
     def execute(self, context):
-        main(context)
+        self.makeCone(context)
         return {'FINISHED'}
 
-def menu_func(self, context):
-    self.layout.operator(MakeGloveMold.bl_idname, text=MakeGloveMold.bl_label)
+# Define the operator class to create a cube
+class MakeGloveMold(bpy.types.Operator):
+    bl_idname = "object.make_glove_mold"
+    bl_label = "Create glove mold for selected object"
+    
+    def check(self, context):
+        # Enable the button only if an object is selected
+        return len(bpy.context.selected_objects) != 0 and "Cone Shell" in bpy.data.objects
 
+    def execute(self, context):
+        makeGloveMold(context)
+        return {'FINISHED'}
 
-# Register and add to the "object" menu (required to also use F3 search "Simple Object Operator" for quick access).
+# Define the panel class
+class CreateGloveMold(bpy.types.Panel):
+    bl_label = "Create Glove Mold Panel"
+    bl_idname = "PT_CreateGloveMold"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Tool'
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column(align=True)
+        col.operator("object.create_cone")
+        col.enabled = len(bpy.context.selected_objects) != 0
+        
+        col.separator()
+        col.prop(context.scene, "glove_mold_thickness")
+        col.prop(context.scene, "shell_thickness")
+        
+        col1 = layout.column(align=True)
+        col1.separator()
+        col1.operator("object.make_glove_mold")
+        col1.enabled = len(bpy.context.selected_objects) != 0 and "Cone Shell" in bpy.data.objects
+
+# Register the classes
 def register():
+    bpy.utils.register_class(CreateConeOperator)
     bpy.utils.register_class(MakeGloveMold)
-    bpy.types.VIEW3D_MT_object.append(menu_func)
-
+    bpy.utils.register_class(CreateGloveMold)
+    bpy.types.Scene.glove_mold_thickness = bpy.props.FloatProperty(name="Glove Mold Thickness",min=0)
+    bpy.types.Scene.shell_thickness = bpy.props.FloatProperty(name="Shell Thickness",min=0)
 
 def unregister():
+    bpy.utils.unregister_class(CreateConeOperator)
     bpy.utils.unregister_class(MakeGloveMold)
-    bpy.types.VIEW3D_MT_object.remove(menu_func)
+    bpy.utils.unregister_class(CreateGloveMold)
+    del bpy.types.Scene.glove_mold_thickness
+    del bpy.types.Scene.shell_thickness
 
-
+# Run the script when Blender loads the plugin
 if __name__ == "__main__":
     register()
-
-    # test call
-    bpy.ops.object.make_glove_mold()
