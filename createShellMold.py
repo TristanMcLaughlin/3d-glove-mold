@@ -58,17 +58,34 @@ def makeGloveMold(context):
     lowResObject.data = originalObject.data.copy()
     lowResObject.name = "Low Res Copy"
     context.collection.objects.link(lowResObject)
+    
+    #Remesh
+    remeshMod = lowResObject.modifiers.new("Remesh", "REMESH")
+    remeshMod.voxel_size = 1
 
     # Create a low res clone for working on
     # Decimate to 1k polys if over 1k polys
     decimateRatio = min(3000 / len(originalObject.data.polygons), 1)
     decimateMod = lowResObject.modifiers.new("Decimate", "DECIMATE")
     decimateMod.ratio = decimateRatio
-    
+
     # Smooth mesh
-    smoothMod = lowResObject.modifiers.new("CorrectiveSmooth", "CORRECTIVE_SMOOTH")
-    smoothMod.factor = 0.8
-    smoothMod.scale = 0
+    smoothMod = lowResObject.modifiers.new("Smooth", "SMOOTH")
+    smoothMod.factor = 1
+    smoothMod.iterations = 1
+    
+    # Corrective smooth mesh
+    cSmoothMod = lowResObject.modifiers.new("CorrectiveSmooth", "CORRECTIVE_SMOOTH")
+    cSmoothMod.factor = 0.8
+    cSmoothMod.iterations = 2
+    cSmoothMod.scale = 2
+    cSmoothMod.use_only_smooth = True
+
+    applyModifiers(context, lowResObject)
+
+    #Remesh
+    remeshMod = lowResObject.modifiers.new("Remesh", "REMESH")
+    remeshMod.voxel_size = 3
 
     applyModifiers(context, lowResObject)
 
