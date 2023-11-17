@@ -69,17 +69,12 @@ def makeGloveMold(context):
     decimateMod = lowResObject.modifiers.new("Decimate", "DECIMATE")
     decimateMod.ratio = decimateRatio
 
+    applyModifiers(context, lowResObject)
+
     # Smooth mesh
     smoothMod = lowResObject.modifiers.new("Smooth", "SMOOTH")
     smoothMod.factor = 1
-    smoothMod.iterations = 1
-    
-    # Corrective smooth mesh
-    cSmoothMod = lowResObject.modifiers.new("CorrectiveSmooth", "CORRECTIVE_SMOOTH")
-    cSmoothMod.factor = 0.8
-    cSmoothMod.iterations = 2
-    cSmoothMod.scale = 2
-    cSmoothMod.use_only_smooth = True
+    smoothMod.iterations = 2
 
     applyModifiers(context, lowResObject)
 
@@ -118,7 +113,9 @@ def makeGloveMold(context):
 
     createBoolean(context, coneFlange, cuboid, 'INTERSECT')
     applyModifiers(context, coneFlange)
-    createBoolean(context, duplicated, coneFlange, 'UNION')
+
+    createBoolean(context, duplicated, coneFlange, 'UNION', 'FAST')
+    applyModifiers(context, duplicated)
 
     # Add the middle flange
     middleSection = lowResObject.copy()
@@ -133,7 +130,7 @@ def makeGloveMold(context):
     applyModifiers(context, middleSection)
 
     # Attach middle flange to cone flange
-    createBoolean(context, duplicated, middleSection, 'UNION')
+    createBoolean(context, duplicated, middleSection, 'UNION', 'FAST')
     applyModifiers(context, duplicated)
     
     # Delete middle flange and cone flange
@@ -206,7 +203,7 @@ class CreateConeOperator(bpy.types.Operator):
         originalObject = context.active_object
         eul = mathutils.Euler((math.radians(180), 0.0, 0.0), 'XYZ')
         coneRadius1 = originalObject.dimensions.x * 0.8
-        bpy.ops.mesh.primitive_cone_add(vertices=64,radius1=coneRadius1,depth=coneRadius1 * 1.2,location=(0,0,originalObject.dimensions.z + (coneRadius1 * 1.75)),rotation=eul)
+        bpy.ops.mesh.primitive_cone_add(vertices=64,radius1=coneRadius1,depth=coneRadius1 * 1.2,location=(0,0,originalObject.dimensions.z + coneRadius1),rotation=eul)
         cone = context.active_object
         cone.name = 'Cone Shell'
         for obj in bpy.context.selected_objects:
