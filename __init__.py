@@ -2,6 +2,17 @@
 from createShellMold import CreateConeOperator, CreateGloveMold, MakeGloveMold
 import bpy
 
+bl_info = {
+    "name": "Create shell for matrix molds",
+    "author": "Tristan McLaughlin",
+    "location": "View3D  -> Tool -> Create Glove Mold Panel",
+    "version": (0, 0, 3),
+    "blender": (2, 90, 0),
+    "description": "Create shell for matrix molds",
+    'tracker_url': "https://github.com/TristanMcLaughlin/3d-glove-mold/issues",
+    "category": "Mesh"
+}
+
 def register():
     bpy.utils.register_class(CreateConeOperator)
     bpy.utils.register_class(MakeGloveMold)
