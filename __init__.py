@@ -17,8 +17,8 @@ def register():
     bpy.utils.register_class(CreateConeOperator)
     bpy.utils.register_class(MakeGloveMold)
     bpy.utils.register_class(CreateGloveMold)
-    bpy.types.Scene.glove_mold_thickness = bpy.props.FloatProperty(name="Glove Mold Thickness",min=0)
-    bpy.types.Scene.shell_thickness = bpy.props.FloatProperty(name="Shell Thickness",min=0)
+    bpy.types.Scene.glove_mold_thickness = bpy.props.FloatProperty(name="Glove Mold Thickness",min=0,default=4)
+    bpy.types.Scene.shell_thickness = bpy.props.FloatProperty(name="Shell Thickness",min=0,default=10)
 
 def unregister():
     bpy.utils.unregister_class(CreateConeOperator)
