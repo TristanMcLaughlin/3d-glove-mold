@@ -191,16 +191,16 @@ def makeGloveMold(context):
     
     bpy.data.objects.remove(bpy.data.objects["Outer Shell"], do_unlink=True)
     
-    cube = makeCube(context, 600, (-300, 0, 300), 'Cube')
+    cube = makeCube(context, 600, (-300, 0, 300), 'Splitter Cube')
 
     # Make a cube to intersect on each side of mesh
     createBoolean(context, rightSide, cube, 'INTERSECT')
-    applyModifiers(context, outerShell)
+    applyModifiers(context, rightSide)
 
     createBoolean(context, leftSide, cube, 'DIFFERENCE')
     applyModifiers(context, leftSide)
     
-    bpy.data.objects.remove(bpy.data.objects["Cube"], do_unlink=True)
+    bpy.data.objects.remove(bpy.data.objects["Splitter Cube"], do_unlink=True)
 
 # Define the operator class to create a cone
 class CreateConeOperator(bpy.types.Operator):
