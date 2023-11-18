@@ -41,10 +41,10 @@ def addSolidifyModifier(context, object, thickness):
     mod.use_rim_only = True
     return
 
-def makeCube(context, size, location):
+def makeCube(context, size, location, name):
     bpy.ops.mesh.primitive_cube_add(size=size,location=location)
     cube = context.active_object
-    cube.hide_set(True)
+    cube.name = name;
     return cube
 
 def makeGloveMold(context):
@@ -65,22 +65,14 @@ def makeGloveMold(context):
 
     # Create a low res clone for working on
     # Decimate to 1k polys if over 1k polys
-    decimateRatio = min(3000 / len(originalObject.data.polygons), 1)
+    decimateRatio = min(5000 / len(originalObject.data.polygons), 1)
     decimateMod = lowResObject.modifiers.new("Decimate", "DECIMATE")
-    decimateMod.ratio = decimateRatio
-
-    applyModifiers(context, lowResObject)
+    decimateMod.ratio = 0.1
 
     # Smooth mesh
     smoothMod = lowResObject.modifiers.new("Smooth", "SMOOTH")
-    smoothMod.factor = 1
-    smoothMod.iterations = 2
-
-    applyModifiers(context, lowResObject)
-
-    #Remesh
-    remeshMod = lowResObject.modifiers.new("Remesh", "REMESH")
-    remeshMod.voxel_size = 3
+    smoothMod.factor = 2
+    smoothMod.iterations = 5
 
     applyModifiers(context, lowResObject)
 
@@ -88,63 +80,43 @@ def makeGloveMold(context):
 
     # Duplicate object for working with
     context.view_layer.objects.active = lowResObject
-    duplicated = context.active_object.copy()
-    duplicated.data = context.active_object.data.copy()
-    duplicated.name = "Shell"
-    context.collection.objects.link(duplicated)
-    context.view_layer.objects.active = duplicated
+    innerShell = context.active_object.copy()
+    innerShell.data = context.active_object.data.copy()
+    innerShell.name = "Inner Shell"
+    context.collection.objects.link(innerShell)
+    context.view_layer.objects.active = innerShell
 
-    # Make thicker version of model as basis of shell
-    addSolidifyModifier(context, duplicated, shellThickness + gloveMoldThickness)
+    # Make inner shell
+    addSolidifyModifier(context, innerShell, gloveMoldThickness)
     
-    createBoolean(context, duplicated, cone, 'UNION')
-
-    # Add the cone flange
-    coneFlange = cone.copy()
-    coneFlange.data = cone.data.copy()
-    coneFlange.name = "Cone Flange"
-    coneFlange.location.z = coneFlange.location.z - 5
-    context.collection.objects.link(coneFlange)
+    smoothMod = innerShell.modifiers.new("Smooth", "SMOOTH")
+    smoothMod.factor = 2
+    smoothMod.iterations = 5
     
-    addSolidifyModifier(context, coneFlange, gloveMoldThickness)
-    applyModifiers(context, coneFlange)
-    cuboid = makeCube(context, 4, (0, 0, 0))
-    bpy.context.object.scale.yz = 500, 500
-
-    createBoolean(context, coneFlange, cuboid, 'INTERSECT')
-    applyModifiers(context, coneFlange)
-
-    createBoolean(context, duplicated, coneFlange, 'UNION', 'FAST')
-    applyModifiers(context, duplicated)
-
-    # Add the middle flange
-    middleSection = lowResObject.copy()
-    middleSection.data = lowResObject.data.copy()
+    applyModifiers(context, innerShell)
+    
+    # Duplicate object into outer shell and add solidify modifier
+    outerShell = innerShell.copy()
+    outerShell.data = innerShell.data.copy()
+    outerShell.name = "Outer Shell"
+    context.collection.objects.link(outerShell)
+    
+    addSolidifyModifier(context, outerShell, shellThickness)
+    applyModifiers(context, outerShell)
+    
+    # Duplicate outerShell into the middle flange section
+    middleSection = outerShell.copy()
+    middleSection.data = outerShell.data.copy()
     middleSection.name = "Middle Flange"
     context.collection.objects.link(middleSection)
     context.view_layer.objects.active = middleSection
 
-    addSolidifyModifier(context, middleSection, flangeThickness)
+    addSolidifyModifier(context, middleSection, 5)
 
-    createBoolean(context, middleSection, cuboid, 'INTERSECT')
-    applyModifiers(context, middleSection)
-
-    # Attach middle flange to cone flange
-    createBoolean(context, duplicated, middleSection, 'UNION', 'FAST')
-    applyModifiers(context, duplicated)
+    # Attach cone to outerShell
+    createBoolean(context, outerShell, cone, 'UNION')
     
-    # Delete middle flange and cone flange
-    bpy.data.objects.remove(bpy.data.objects["Middle Flange"], do_unlink=True)
-    bpy.data.objects.remove(bpy.data.objects["Cone Flange"], do_unlink=True)
-    
-    ## Create inner shell to be subtracted from main shell
-    innerShell = lowResObject.copy()
-    innerShell.data = lowResObject.data.copy()
-    innerShell.name = "Shell"
-    context.collection.objects.link(innerShell)
-    
-    addSolidifyModifier(context, innerShell, gloveMoldThickness)
-
+    # Create inside cone
     innerCone = cone.copy()
     innerCone.data = cone.data.copy()
     innerCone.name = "Cone Inner"
@@ -153,41 +125,82 @@ def makeGloveMold(context):
     
     createBoolean(context, innerShell, innerCone, 'UNION')
     applyModifiers(context, innerShell)
+
+    # Add the outer cone flange
+    coneFlange = cone.copy()
+    coneFlange.data = cone.data.copy()
+    coneFlange.name = "Cone Flange"
+    coneFlange.location.z = coneFlange.location.z - 5
+    context.collection.objects.link(coneFlange)
+
+    addSolidifyModifier(context, coneFlange, gloveMoldThickness)
+    applyModifiers(context, coneFlange)
+    cuboid = makeCube(context, 4, (0, 0, 0), 'Mid Cube')
+    bpy.context.object.scale.yz = 500, 500
     
-    # Delete inner cone
+    createBoolean(context, middleSection, cuboid, 'INTERSECT')
+    applyModifiers(context, middleSection)
+
+    createBoolean(context, coneFlange, cuboid, 'INTERSECT')
+    applyModifiers(context, coneFlange)
+
+    # Attach middle flange to ouer shell shape
+    createBoolean(context, outerShell, coneFlange, 'UNION', 'FAST')
+    applyModifiers(context, outerShell)
+
+    createBoolean(context, outerShell, middleSection, 'UNION', 'FAST')
+    applyModifiers(context, outerShell)
+
+    # Delete middle flange and cone flange
+    bpy.data.objects.remove(bpy.data.objects["Middle Flange"], do_unlink=True)
+    bpy.data.objects.remove(bpy.data.objects["Cone Flange"], do_unlink=True)
+
+    # Delete cone
     bpy.data.objects.remove(bpy.data.objects["Cone Inner"], do_unlink=True)
     bpy.data.objects.remove(bpy.data.objects["Cone Shell"], do_unlink=True)
     
+    # Delete objects that wont be used from here on out
+    bpy.data.objects.remove(bpy.data.objects["Low Res Copy"], do_unlink=True)
+    bpy.data.objects.remove(bpy.data.objects["Mid Cube"], do_unlink=True)
+
     # Subtract inner from outer shells
-    createBoolean(context, duplicated, innerShell, 'DIFFERENCE', 'FAST')
-    applyModifiers(context, innerShell)
-    applyModifiers(context, duplicated)
+    createBoolean(context, outerShell, innerShell, 'DIFFERENCE')
+    applyModifiers(context, outerShell)
     
-    # Hide inner shell
-    # TODO: Boolean from low res object to create a weight/volume estimate
-    innerShell.hide_set(True)
-    lowResObject.hide_set(True)
+    # Remove Inner Shell
+    bpy.data.objects.remove(bpy.data.objects["Inner Shell"], do_unlink=True)
 
     # Make a cube to be used for floor boolean, 400mm dimension
-    cube = makeCube(context, 1000, (0, 0, -499.9))
-    createBoolean(context, duplicated, cube, 'DIFFERENCE')
-
+    cube = makeCube(context, 1000, (0, 0, -499.9), 'Floor Cube')
+    createBoolean(context, outerShell, cube, 'DIFFERENCE')
+    applyModifiers(context, outerShell)
+    
+    bpy.data.objects.remove(bpy.data.objects["Floor Cube"], do_unlink=True)
+    
     # Duplicated union mesh
-    leftSide = duplicated.copy()
-    leftSide.data = duplicated.data.copy()
-    leftSide.name = "Shell 2"
+    rightSide = outerShell.copy()
+    rightSide.data = outerShell.data.copy()
+    rightSide.name = "Right Side"
+    context.collection.objects.link(rightSide)
+    
+    # Duplicated union mesh
+    leftSide = outerShell.copy()
+    leftSide.data = outerShell.data.copy()
+    leftSide.name = "Left Side"
     context.collection.objects.link(leftSide)
+    
+    bpy.data.objects.remove(bpy.data.objects["Outer Shell"], do_unlink=True)
+    
+    cube = makeCube(context, 600, (-300, 0, 300), 'Cube')
 
     # Make a cube to intersect on each side of mesh
-    cube = makeCube(context, 600, (300, 0, 300))
-    createBoolean(context, duplicated, cube, 'DIFFERENCE')
+    createBoolean(context, rightSide, cube, 'INTERSECT')
+    applyModifiers(context, outerShell)
 
-    cube = makeCube(context, 600, (-300, 0, 300))
     createBoolean(context, leftSide, cube, 'DIFFERENCE')
-    
-    # Apply modifiers to each side of mesh
-    applyModifiers(context, duplicated)
     applyModifiers(context, leftSide)
+    
+    bpy.data.objects.remove(bpy.data.objects["Cube"], do_unlink=True)
 
 # Define the operator class to create a cone
 class CreateConeOperator(bpy.types.Operator):
