@@ -1,5 +1,5 @@
 # Register the classes
-from createShellMold import CreateConeOperator, CreateGloveMold, MakeGloveMold
+from . createShellMold import CreateConeOperator, CreateGloveMold, MakeGloveMold
 import bpy
 
 bl_info = {
