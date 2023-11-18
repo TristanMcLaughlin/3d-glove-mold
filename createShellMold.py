@@ -160,11 +160,9 @@ def makeGloveMold(context):
     bpy.data.objects.remove(bpy.data.objects["Inner Shell"], do_unlink=True)
 
     # Make a cube to be used for floor boolean, 400mm dimension
-    cube = makeCube(context, 1000, (0, 0, -499.9), 'Floor Cube')
-    createBoolean(context, outerShell, cube, 'DIFFERENCE')
+    floorCube = makeCube(context, 1000, (0, 0, -499.9), 'Floor Cube')
+    createBoolean(context, outerShell, floorCube, 'DIFFERENCE')
     applyModifiers(context, outerShell)
-    
-    bpy.data.objects.remove(bpy.data.objects["Floor Cube"], do_unlink=True)
     
     # Duplicated union mesh
     rightSide = outerShell.copy()
