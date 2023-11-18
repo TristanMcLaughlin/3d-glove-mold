@@ -6,7 +6,7 @@ bl_info = {
     "name": "Create shell for matrix molds",
     "author": "Tristan McLaughlin",
     "location": "View3D  -> Tool -> Create Glove Mold Panel",
-    "version": (0, 0, 1),
+    "version": (0, 0, 2),
     "blender": (2, 90, 0),
     "description": "Create shell for matrix molds",
     'tracker_url': "https://github.com/TristanMcLaughlin/3d-glove-mold/issues",
